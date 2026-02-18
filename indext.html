@@ -1,0 +1,475 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, Bot, User, Code, Copy, Check, Terminal, Cpu, RefreshCw, Zap } from 'lucide-react';
+
+// --- Knowledge Base (ฐานข้อมูลความรู้) ---
+const KNOWLEDGE_BASE = [
+  {
+    keywords: ['สวัสดี', 'hi', 'hello', 'tinn'],
+    response: "สวัสดีครับ! ผมคือ Arduino Assistant 🤖 ยินดีช่วยเขียนโค้ดและตอบคำถามเกี่ยวกับ Sensor ต่างๆ ครับ ลองถามมาได้เลย เช่น 'ขอโค้ดวัดอุณหภูมิ' หรือ 'วิธีใช้ Servo'",
+    code: null
+  },
+  {
+    keywords: ['led', 'blinking', 'ไฟกระพริบ', 'เปิดปิดไฟ'],
+    topic: 'LED Blink',
+    response: "นี่คือโค้ดพื้นฐานสำหรับการทำไฟกระพริบ (Blink) ที่ขา 13 ครับ",
+    code: `void setup() {
+  pinMode(13, OUTPUT); // กำหนดขา 13 เป็น Output
+}
+
+void loop() {
+  digitalWrite(13, HIGH); // เปิดไฟ
+  delay(1000);            // รอ 1 วินาที
+  digitalWrite(13, LOW);  // ปิดไฟ
+  delay(1000);            // รอ 1 วินาที
+}`
+  },
+  {
+    keywords: ['ultrasonic', 'hcsr04', 'hc-sr04', 'ระยะทาง', 'distance', 'วัดระยะ'],
+    topic: 'Ultrasonic (HC-SR04)',
+    response: "สำหรับการวัดระยะทางด้วย HC-SR04 เราจะใช้การส่งคลื่นเสียงและจับเวลาสะท้อนกลับครับ นี่คือตัวอย่างโค้ด:",
+    code: `const int trigPin = 9;
+const int echoPin = 10;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+}
+
+void loop() {
+  long duration;
+  int distance;
+
+  // ส่งคลื่นเสียงออกไป
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // รับเวลาที่เสียงสะท้อนกลับมา
+  duration = pulseIn(echoPin, HIGH);
+
+  // คำนวณระยะทาง (cm)
+  distance = duration * 0.034 / 2;
+
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.println(" cm");
+  
+  delay(100);
+}`
+  },
+  {
+    keywords: ['dht', 'dht11', 'dht22', 'temperature', 'humidity', 'อุณหภูมิ', 'ความชื้น'],
+    topic: 'DHT11/DHT22',
+    response: "การอ่านค่าจาก DHT11 หรือ DHT22 ต้องใช้ไลบรารี 'DHT.h' ครับ (อย่าลืมติดตั้ง Library ก่อนนะครับ)",
+    code: `#include "DHT.h"
+
+#define DHTPIN 2     // ขาที่ต่อกับ DHT
+#define DHTTYPE DHT11   // หรือ DHT22
+
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+}
+
+void loop() {
+  delay(2000); // รอเซ็นเซอร์อ่านค่า
+
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+
+  Serial.print("Humidity: ");
+  Serial.print(h);
+  Serial.print(" %\t");
+  Serial.print("Temperature: ");
+  Serial.print(t);
+  Serial.println(" *C");
+}`
+  },
+  {
+    keywords: ['ldr', 'light', 'photoresistor', 'แสง', 'วัดแสง'],
+    topic: 'LDR (Light Sensor)',
+    response: "LDR เป็นตัวต้านทานปรับค่าตามแสง ให้อ่านค่าแบบ Analog ครับ ยิ่งแสงมาก ค่าจะยิ่งน้อย (ขึ้นอยู่กับการต่อวงจร)",
+    code: `const int ldrPin = A0; // ต่อขา LDR เข้ากับ A0
+
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  int ldrValue = analogRead(ldrPin); // อ่านค่า 0-1023
+  
+  Serial.print("Light Level: ");
+  Serial.println(ldrValue);
+  
+  delay(500);
+}`
+  },
+  {
+    keywords: ['servo', 'motor', 'servomotor', 'เซอร์โว', 'หมุน'],
+    topic: 'Servo Motor',
+    response: "การควบคุม Servo Motor จะใช้ไลบรารี <Servo.h> ครับ สั่งงานเป็นองศา (0-180)",
+    code: `#include <Servo.h>
+
+Servo myservo;  
+
+void setup() {
+  myservo.attach(9);  // ต่อสายสัญญาณเข้าขา 9
+}
+
+void loop() {
+  myservo.write(0);   // หมุนไปที่ 0 องศา
+  delay(1000);
+  myservo.write(90);  // หมุนไปที่ 90 องศา
+  delay(1000);
+  myservo.write(180); // หมุนไปที่ 180 องศา
+  delay(1000);
+}`
+  },
+  {
+    keywords: ['relay', 'switch', 'รีเลย์', 'สวิตช์', 'เปิดปิดไฟบ้าน'],
+    topic: 'Relay Module',
+    response: "Relay ทำงานเหมือนสวิตช์ไฟที่ควบคุมด้วยดิจิตอล ส่วนใหญ่ทำงานแบบ Active LOW (LOW = ทำงาน)",
+    code: `const int relayPin = 7;
+
+void setup() {
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, HIGH); // ปิด Relay ไว้ก่อน (สำหรับ Active LOW)
+}
+
+void loop() {
+  digitalWrite(relayPin, LOW);  // เปิด Relay (Active)
+  delay(2000);
+  digitalWrite(relayPin, HIGH); // ปิด Relay
+  delay(2000);
+}`
+  },
+  {
+    keywords: ['soil', 'moisture', 'ความชื้นในดิน', 'รดน้ำต้นไม้'],
+    topic: 'Soil Moisture Sensor',
+    response: "เซ็นเซอร์วัดความชื้นในดินอ่านค่าแบบ Analog ยิ่งดินแห้ง ค่าจะยิ่งสูง (สำหรับแบบ Resistive ทั่วไป)",
+    code: `const int soilPin = A0;
+
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  int moistureValue = analogRead(soilPin);
+  
+  Serial.print("Soil Moisture: ");
+  Serial.println(moistureValue);
+  
+  if(moistureValue > 800) {
+    Serial.println("Soil is DRY -> Turn on pump");
+  } else {
+    Serial.println("Soil is WET");
+  }
+  
+  delay(1000);
+}`
+  },
+  {
+    keywords: ['button', 'pushbutton', 'switch', 'ปุ่มกด'],
+    topic: 'Push Button',
+    response: "การใช้ปุ่มกด แนะนำให้ใช้ INPUT_PULLUP เพื่อไม่ต้องต่อตัวต้านทานภายนอกครับ (กดติด = LOW, ปล่อยดับ = HIGH)",
+    code: `const int buttonPin = 2;
+const int ledPin = 13;
+
+void setup() {
+  pinMode(buttonPin, INPUT_PULLUP); // ใช้ Pull-up ภายใน
+  pinMode(ledPin, OUTPUT);
+}
+
+void loop() {
+  int buttonState = digitalRead(buttonPin);
+
+  if (buttonState == LOW) { // กดปุ่ม (LOW)
+    digitalWrite(ledPin, HIGH);
+  } else {
+    digitalWrite(ledPin, LOW);
+  }
+}`
+  },
+  {
+    keywords: ['lcd', 'i2c', 'display', 'หน้าจอ', 'จอ'],
+    topic: 'LCD I2C (16x2)',
+    response: "การใช้จอ LCD แบบ I2C ช่วยลดจำนวนสายไฟ ต้องใช้ไลบรารี LiquidCrystal_I2C และหา Address (ปกติคือ 0x27 หรือ 0x3F)",
+    code: `#include <Wire.h> 
+#include <LiquidCrystal_I2C.h>
+
+// ตั้งค่า Address 0x27 สำหรับจอ 16 ตัวอักษร 2 บรรทัด
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+void setup() {
+  lcd.init();
+  lcd.backlight(); // เปิดไฟหน้าจอ
+  
+  lcd.setCursor(0, 0); // คอลัมน์ 0 บรรทัด 0
+  lcd.print("Hello, Arduino!");
+  
+  lcd.setCursor(0, 1); // คอลัมน์ 0 บรรทัด 1
+  lcd.print("I2C LCD Display");
+}
+
+void loop() {
+  // ทำงานอื่นๆ
+}`
+  }
+];
+
+// --- Components ---
+
+const MessageBubble = ({ message }) => {
+  const isBot = message.sender === 'bot';
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className={`flex w-full mb-6 ${isBot ? 'justify-start' : 'justify-end'}`}>
+      <div className={`flex max-w-[90%] md:max-w-[80%] ${isBot ? 'flex-row' : 'flex-row-reverse'}`}>
+        {/* Avatar */}
+        <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-2 ml-2 ${isBot ? 'bg-teal-600' : 'bg-blue-600'}`}>
+          {isBot ? <Bot size={24} className="text-white" /> : <User size={24} className="text-white" />}
+        </div>
+
+        {/* Content */}
+        <div className={`flex flex-col ${isBot ? 'items-start' : 'items-end'}`}>
+          <div className={`p-4 rounded-2xl shadow-sm text-sm md:text-base whitespace-pre-wrap ${
+            isBot 
+              ? 'bg-white text-gray-800 rounded-tl-none border border-gray-100' 
+              : 'bg-blue-600 text-white rounded-tr-none'
+          }`}>
+            {message.text}
+          </div>
+
+          {/* Code Block (Only for Bot if code exists) */}
+          {isBot && message.code && (
+            <div className="mt-3 w-full max-w-2xl rounded-lg overflow-hidden border border-gray-700 shadow-lg bg-[#1e1e1e]">
+              <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-gray-700">
+                <div className="flex items-center space-x-2">
+                  <Code size={16} className="text-teal-400" />
+                  <span className="text-xs text-gray-300 font-mono">Arduino C++</span>
+                </div>
+                <button 
+                  onClick={handleCopy}
+                  className="flex items-center space-x-1 text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                  <span>{copied ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+              <div className="p-4 overflow-x-auto">
+                <pre className="font-mono text-sm text-gray-300 leading-relaxed">
+                  <code>{message.code}</code>
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const QuickActionChip = ({ label, onClick }) => (
+  <button 
+    onClick={onClick}
+    className="px-4 py-2 bg-gray-100 hover:bg-teal-50 text-teal-700 text-sm font-medium rounded-full border border-gray-200 hover:border-teal-200 transition-all whitespace-nowrap"
+  >
+    {label}
+  </button>
+);
+
+// --- Main App Component ---
+
+export default function App() {
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState([
+    {
+      id: 1,
+      sender: 'bot',
+      text: "สวัสดีครับ! ผมคือผู้ช่วย Arduino 🤖\nสอบถามคำสั่งควบคุม Sensor หรือขอตัวอย่างโค้ดได้เลยครับ\n\nลองถามว่า: \"วัดระยะทาง HC-SR04\" หรือ \"อ่านค่า LDR\""
+    }
+  ]);
+  const messagesEndRef = useRef(null);
+  const [isTyping, setIsTyping] = useState(false);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isTyping]);
+
+  const findResponse = (query) => {
+    const normalizedQuery = query.toLowerCase();
+    
+    // Search in Knowledge Base
+    const match = KNOWLEDGE_BASE.find(item => 
+      item.keywords.some(keyword => normalizedQuery.includes(keyword))
+    );
+
+    if (match) {
+      return {
+        text: match.response,
+        code: match.code
+      };
+    }
+
+    return {
+      text: "ขออภัยครับ ผมยังไม่มีข้อมูลเกี่ยวกับอุปกรณ์นั้น 😅\n\nลองถามเกี่ยวกับ: Ultrasonic, DHT11, Servo, Relay, LDR, ปุ่มกด หรือ LCD ดูนะครับ",
+      code: null
+    };
+  };
+
+  const handleSend = async (textOverride = null) => {
+    const textToSend = textOverride || input;
+    if (!textToSend.trim()) return;
+
+    // Add User Message
+    const userMsgId = Date.now();
+    setMessages(prev => [...prev, { id: userMsgId, sender: 'user', text: textToSend }]);
+    setInput('');
+    setIsTyping(true);
+
+    // Simulate Bot Delay
+    setTimeout(() => {
+      const response = findResponse(textToSend);
+      setMessages(prev => [...prev, { 
+        id: Date.now() + 1, 
+        sender: 'bot', 
+        text: response.text,
+        code: response.code
+      }]);
+      setIsTyping(false);
+    }, 600 + Math.random() * 500); // Random delay for realism
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const quickActions = [
+    "วัดระยะทาง HC-SR04",
+    "วัดอุณหภูมิ DHT11",
+    "หมุน Servo Motor",
+    "เปิดปิดไฟ LED",
+    "วัดความชื้นในดิน",
+    "ใช้งานจอ LCD"
+  ];
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-50 text-gray-900 font-sans">
+      
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+        <div className="flex items-center space-x-3">
+          <div className="bg-teal-600 p-2 rounded-lg">
+            <Cpu size={24} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">Arduino Code Helper</h1>
+            <p className="text-xs text-gray-500 flex items-center">
+              <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+              Online • Ready to code
+            </p>
+          </div>
+        </div>
+        <button 
+          onClick={() => setMessages([{ id: 1, sender: 'bot', text: "สวัสดีครับ! เริ่มต้นใหม่ได้เลยครับ" }])}
+          className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-full transition-colors"
+          title="Reset Chat"
+        >
+          <RefreshCw size={20} />
+        </button>
+      </header>
+
+      {/* Chat Area */}
+      <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#f8fafc]">
+        <div className="max-w-4xl mx-auto">
+          {messages.map((msg) => (
+            <MessageBubble key={msg.id} message={msg} />
+          ))}
+          
+          {isTyping && (
+            <div className="flex justify-start mb-6 animate-pulse">
+               <div className="flex items-center space-x-2 ml-14 bg-white px-4 py-3 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm">
+                 <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                 <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                 <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+               </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </main>
+
+      {/* Input Area */}
+      <footer className="bg-white border-t border-gray-200 p-4">
+        <div className="max-w-4xl mx-auto">
+          
+          {/* Quick Actions (Horizontal Scroll) */}
+          <div className="flex space-x-2 overflow-x-auto pb-3 mb-2 scrollbar-hide">
+             <div className="flex items-center text-xs text-gray-400 font-medium mr-2">
+               <Zap size={14} className="mr-1" /> แนะนำ:
+             </div>
+             {quickActions.map((action, idx) => (
+               <QuickActionChip key={idx} label={action} onClick={() => handleSend(action)} />
+             ))}
+          </div>
+
+          {/* Text Input */}
+          <div className="relative flex items-center">
+            <div className="absolute left-4 text-gray-400">
+               <Terminal size={20} />
+            </div>
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="พิมพ์คำถามที่นี่... (เช่น 'ขอโค้ด Relay')"
+              className="w-full pl-12 pr-14 py-4 bg-gray-100 border-2 border-transparent focus:bg-white focus:border-teal-500 rounded-xl outline-none transition-all shadow-sm text-gray-700 placeholder-gray-400"
+            />
+            <button
+              onClick={() => handleSend()}
+              disabled={!input.trim()}
+              className={`absolute right-2 p-2 rounded-lg transition-all ${
+                input.trim() 
+                  ? 'bg-teal-600 text-white hover:bg-teal-700 shadow-md transform hover:scale-105' 
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <Send size={20} />
+            </button>
+          </div>
+          <div className="text-center mt-2">
+            <p className="text-xs text-gray-400">
+              AI อาจให้คำตอบที่ไม่สมบูรณ์ โปรดตรวจสอบ Pin wiring ก่อนใช้งานจริง
+            </p>
+          </div>
+        </div>
+      </footer>
+
+    </div>
+  );
+}
